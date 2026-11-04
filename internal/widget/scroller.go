@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -631,6 +632,16 @@ func (s *Scroll) Scrolled(ev *fyne.ScrollEvent) {
 		}
 		s.refreshBars()
 	}
+}
+
+// AlwaysShowScrollBars shows scroll bars whatever the system prefers, as
+// on a platform with no preference. The test driver sets it, so a test does
+// not depend on the machine's setting, and a scroll starts no wall-clock
+// timer that fires after the test that scrolled.
+var AlwaysShowScrollBars atomic.Bool
+
+func scrollBarAlwaysVisible() bool {
+	return AlwaysShowScrollBars.Load() || systemScrollBarAlwaysVisible()
 }
 
 func (s *Scroll) refreshBars() {

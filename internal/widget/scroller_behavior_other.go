@@ -6,7 +6,7 @@ func isScrollerPageOnTap() bool {
 	return false
 }
 
-func scrollBarAlwaysVisible() bool {
+func systemScrollBarAlwaysVisible() bool {
 	return true
 }
 

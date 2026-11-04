@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/internal/painter"
 	"fyne.io/fyne/v2/internal/scheduler"
 	"fyne.io/fyne/v2/internal/test"
+	intwidget "fyne.io/fyne/v2/internal/widget"
 	"fyne.io/fyne/v2/theme"
 )
 
@@ -203,6 +204,9 @@ func NewApp() fyne.App {
 		clip: NewClipboard(), cache: makeCache(),
 	}
 	settings.app = testApp
+	// Scroll bars stay shown under test, as on a platform without a
+	// preference, so a scroll schedules nothing on wall-clock time.
+	intwidget.AlwaysShowScrollBars.Store(true)
 	root, _ := store.docRootURI()
 	store.Docs = &internal.Docs{RootDocURI: root}
 	painter.ClearFontCache()
