@@ -23,7 +23,7 @@ func isScrollerPageOnTap() bool {
 // is set to "Always" (NSScrollerStyleLegacy = 0).
 // When set to "When scrolling" or "Automatically" (NSScrollerStyleOverlay = 1),
 // scroll bars should only appear on hover or while scrolling.
-func scrollBarAlwaysVisible() bool {
+func systemScrollBarAlwaysVisible() bool {
 	return C.getScrollerStyle() == 0
 }
 
