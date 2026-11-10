@@ -91,37 +91,62 @@ import (
 	"github.com/go-text/typesetting/font"
 )
 
-// glyphMargin is the room the atlas leaves around a glyph's ink. Smoothing
-// thickens a stroke by about a pixel, which needs a second one.
 // nativeGlyphs is true where rasteriseGlyphNative draws, so the whole-run
 // path draws a glyph at a time to match the atlas.
 const nativeGlyphs = true
 
+// glyphMargin is the room the atlas leaves around a glyph's ink. Smoothing
+// thickens a stroke by about a pixel, which needs a second one.
 const glyphMargin = 2
-
-// fontSources holds the bytes each theme font was parsed from, so CoreText
-// can open exactly the font the shaper picked glyph IDs from.
-var fontSources sync.Map // *font.Font -> []byte
-
-func rememberFontSource(f *font.Font, data []byte) {
-	fontSources.Store(f, data)
-}
 
 type coreTextKey struct {
 	font *font.Font
 	size float32
 }
 
-// coreText holds each font CoreText opened, and nil for one it cannot,
-// so a miss is asked once. Faces live as long as the font cache, and the
-// sizes a UI draws at are few.
+// coreText holds what CoreText draws with. Its lock is held while a glyph is
+// drawn, so a font is never released under a draw.
 var coreText struct {
 	sync.Mutex
+	// sources holds the bytes each theme font was parsed from, so CoreText
+	// opens exactly the font the shaper picked glyph IDs from.
+	sources map[*font.Font][]byte
+	// descriptors and fonts hold each font CoreText opened, and nil for one
+	// it cannot, so a miss is asked once.
 	descriptors map[*font.Font]C.CTFontDescriptorRef
 	fonts       map[coreTextKey]C.CTFontRef
 }
 
+// coreTextFontsMax bounds the fonts kept open, one per font and size.
 const coreTextFontsMax = 256
+
+func rememberFontSource(f *font.Font, data []byte) {
+	coreText.Lock()
+	defer coreText.Unlock()
+	if coreText.sources == nil {
+		coreText.sources = make(map[*font.Font][]byte)
+	}
+	coreText.sources[f] = data
+}
+
+// forgetNativeFonts releases everything CoreText opened, for ClearFontCache:
+// the fonts it was opened from are no longer used.
+func forgetNativeFonts() {
+	coreText.Lock()
+	defer coreText.Unlock()
+	releaseFonts()
+	for _, desc := range coreText.descriptors {
+		C.fyne_ct_release(C.CFTypeRef(desc))
+	}
+	coreText.sources, coreText.descriptors = nil, nil
+}
+
+func releaseFonts() {
+	for _, ct := range coreText.fonts {
+		C.fyne_ct_release(C.CFTypeRef(ct))
+	}
+	coreText.fonts = nil
+}
 
 // rasteriseGlyphNative draws a glyph with CoreText, as the rest of macOS
 // draws text: with font smoothing, where go-text draws strokes noticeably
@@ -133,20 +158,22 @@ func rasteriseGlyphNative(dst *image.RGBA, g PlacedGlyph, fontSize, scale float3
 	if len(g.Face.Coords()) != 0 {
 		return false
 	}
-	ct := coreTextFont(g.Face.Font, fontSize*scale)
-	if ct == 0 {
-		return false
-	}
 	b := dst.Bounds()
 	w, h := b.Dx(), b.Dy()
 	if w <= 0 || h <= 0 {
-		return true
-	}
-	gray := make([]byte, w*h)
-	if C.fyne_ct_draw_glyph(ct, C.ushort(g.Glyph.GlyphID), (*C.uchar)(unsafe.Pointer(&gray[0])), C.int(w), C.int(h),
-		C.double(float32(x)+subX), C.double(y)) == 0 {
 		return false
 	}
+	gray := make([]byte, w*h)
+
+	coreText.Lock()
+	ct := coreTextFont(g.Face.Font, fontSize*scale)
+	drawn := ct != 0 && C.fyne_ct_draw_glyph(ct, C.ushort(g.Glyph.GlyphID), (*C.uchar)(unsafe.Pointer(&gray[0])),
+		C.int(w), C.int(h), C.double(float32(x)+subX), C.double(y)) != 0
+	coreText.Unlock()
+	if !drawn {
+		return false
+	}
+
 	// Premultiplied white, as go-text draws it: every channel is coverage.
 	for row := 0; row < h; row++ {
 		o := dst.PixOffset(b.Min.X, b.Min.Y+row)
@@ -158,17 +185,16 @@ func rasteriseGlyphNative(dst *image.RGBA, g PlacedGlyph, fontSize, scale float3
 	return true
 }
 
+// coreTextFont is called with coreText locked.
 func coreTextFont(f *font.Font, size float32) C.CTFontRef {
-	coreText.Lock()
-	defer coreText.Unlock()
 	key := coreTextKey{font: f, size: size}
 	if ct, ok := coreText.fonts[key]; ok {
 		return ct
 	}
-	if coreText.fonts == nil || len(coreText.fonts) >= coreTextFontsMax {
-		for _, ct := range coreText.fonts {
-			C.fyne_ct_release(C.CFTypeRef(ct))
-		}
+	if len(coreText.fonts) >= coreTextFontsMax {
+		releaseFonts()
+	}
+	if coreText.fonts == nil {
 		coreText.fonts = make(map[coreTextKey]C.CTFontRef)
 	}
 	var ct C.CTFontRef
@@ -179,6 +205,7 @@ func coreTextFont(f *font.Font, size float32) C.CTFontRef {
 	return ct
 }
 
+// coreTextDescriptor is called with coreText locked.
 func coreTextDescriptor(f *font.Font) C.CTFontDescriptorRef {
 	if desc, ok := coreText.descriptors[f]; ok {
 		return desc
@@ -187,8 +214,7 @@ func coreTextDescriptor(f *font.Font) C.CTFontDescriptorRef {
 		coreText.descriptors = make(map[*font.Font]C.CTFontDescriptorRef)
 	}
 	var desc C.CTFontDescriptorRef
-	if data, ok := fontSources.Load(f); ok {
-		raw := data.([]byte)
+	if raw, ok := coreText.sources[f]; ok {
 		if len(raw) > 0 {
 			desc = C.fyne_ct_descriptor(nil, unsafe.Pointer(&raw[0]), C.long(len(raw)), 0)
 		}

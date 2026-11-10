@@ -212,6 +212,7 @@ func ClearFontCache() {
 	fontCache.Clear()
 	fontCustomCache.Clear()
 	parsedFonts.Clear()
+	forgetNativeFonts()
 
 	runBufferMut.Lock()
 	clear(shapeCache)
@@ -225,7 +226,7 @@ func DrawString(dst draw.Image, s string, c color.Color, f shaping.Fontmap, font
 
 // DrawStringOffset draws a string shifted left by the specified pixel offset.
 func DrawStringOffset(dst draw.Image, s string, c color.Color, f shaping.Fontmap, fontSize, scale float32, style fyne.TextStyle, offset int) {
-	drawStringOffset(dst, s, c, f, fontSize, scale, style, offset, false)
+	drawText(dst, s, c, f, fontSize, scale, style, offset, false)
 }
 
 // DrawStringNative is DrawStringOffset drawing outlines as the glyph atlas
@@ -234,10 +235,10 @@ func DrawStringOffset(dst draw.Image, s string, c color.Color, f shaping.Fontmap
 // weight. The software painter keeps DrawString, whose output is the same
 // on every platform.
 func DrawStringNative(dst draw.Image, s string, c color.Color, f shaping.Fontmap, fontSize, scale float32, style fyne.TextStyle, offset int) {
-	drawStringOffset(dst, s, c, f, fontSize, scale, style, offset, nativeGlyphs)
+	drawText(dst, s, c, f, fontSize, scale, style, offset, nativeGlyphs)
 }
 
-func drawStringOffset(dst draw.Image, s string, c color.Color, f shaping.Fontmap, fontSize, scale float32, style fyne.TextStyle, offset int, native bool) {
+func drawText(dst draw.Image, s string, c color.Color, f shaping.Fontmap, fontSize, scale float32, style fyne.TextStyle, offset int, native bool) {
 	r := render.Renderer{
 		FontSize: fontSize,
 		PixScale: scale,

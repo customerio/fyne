@@ -18,6 +18,8 @@ const glyphMargin = 1
 
 func rememberFontSource(*font.Font, []byte) {}
 
+func forgetNativeFonts() {}
+
 // rasteriseGlyphNative is darwin's; elsewhere go-text draws every glyph.
 func rasteriseGlyphNative(*image.RGBA, PlacedGlyph, float32, float32, int, int, float32) bool {
 	return false

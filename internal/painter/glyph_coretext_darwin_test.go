@@ -18,11 +18,11 @@ import (
 // CoreText draws a glyph with font smoothing, which thickens its strokes:
 // the same glyph, at the same place, carries more ink than go-text draws.
 func TestRasteriseAtlasGlyph_SmoothsThemeAndSystemFonts(t *testing.T) {
-	theme := CachedFontFace(fyne.TextStyle{}, nil, nil).Fonts
+	fonts := CachedFontFace(fyne.TextStyle{}, nil, nil).Fonts
 	// CJK comes from a system font, which CoreText opens from its file.
 	for _, s := range []string{"m", "g", "水"} {
 		var placed []PlacedGlyph
-		WalkGlyphs(theme, s, 14, 2, fyne.TextStyle{}, func(pg PlacedGlyph) { placed = append(placed, pg) })
+		WalkGlyphs(fonts, s, 14, 2, fyne.TextStyle{}, func(pg PlacedGlyph) { placed = append(placed, pg) })
 		require.Len(t, placed, 1, s)
 		pg := placed[0]
 		require.NotZero(t, pg.Glyph.GlyphID, "%q has no glyph", s)
@@ -77,4 +77,25 @@ func ink(img *image.RGBA) (int, image.Rectangle) {
 		}
 	}
 	return sum, box
+}
+
+// A theme change clears the font cache; the fonts CoreText opened from it go
+// too, and drawing afterwards opens them again.
+func TestClearFontCache_ReleasesCoreTextFonts(t *testing.T) {
+	face := CachedFontFace(fyne.TextStyle{}, nil, nil).Fonts
+	var pg PlacedGlyph
+	WalkGlyphs(face, "m", 14, 2, fyne.TextStyle{}, func(p PlacedGlyph) { pg = p })
+	img := image.NewRGBA(image.Rect(0, 0, 48, 48))
+	require.True(t, rasteriseGlyphNative(img, pg, 14, 2, 8, 36, 0))
+
+	ClearFontCache()
+	coreText.Lock()
+	assert.Empty(t, coreText.fonts)
+	assert.Empty(t, coreText.descriptors)
+	assert.Empty(t, coreText.sources)
+	coreText.Unlock()
+
+	face = CachedFontFace(fyne.TextStyle{}, nil, nil).Fonts
+	WalkGlyphs(face, "m", 14, 2, fyne.TextStyle{}, func(p PlacedGlyph) { pg = p })
+	assert.True(t, rasteriseGlyphNative(image.NewRGBA(image.Rect(0, 0, 48, 48)), pg, 14, 2, 8, 36, 0))
 }
