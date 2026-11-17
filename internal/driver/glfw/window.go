@@ -496,6 +496,9 @@ func (w *window) mouseOut() {
 
 func (w *window) processMouseClicked(button desktop.MouseButton, action action, modifiers fyne.KeyModifier) {
 	w.ensurePositionProcessed()
+	if action == press && w.mouseButton == 0 {
+		w.refreshMousePos()
+	}
 
 	mousePos := w.mousePos
 	mouseDragStarted := w.mouseDragStarted
@@ -603,6 +606,24 @@ func (w *window) processMouseClicked(button desktop.MouseButton, action action, 
 	// Check for double click/tap on left mouse button
 	if action == release && button == desktop.MouseButtonPrimary && !mouseDragStarted {
 		w.mouseClickedHandleTapDoubleTap(co, ev)
+	}
+}
+
+// refreshMousePos moves the pointer to where the cursor really is, so a press
+// is hit-tested there. Moves reach the window only while its view receives
+// them: on macOS, a native view embedded in the window that became first
+// responder takes every mouse move, and the last position seen goes stale.
+// It goes through processMouseMoved so hover state and the cursor follow.
+// With a button already held the view is tracking the drag, and the
+// position it reported is current, so this is called only with none held.
+func (w *window) refreshMousePos() {
+	xpos, ypos, ok := w.cursorPos()
+	if !ok {
+		return
+	}
+	pos := fyne.NewPos(scale.ToFyneCoordinate(w.canvas, int(xpos)), scale.ToFyneCoordinate(w.canvas, int(ypos)))
+	if pos != w.mousePos {
+		w.processMouseMoved(xpos, ypos)
 	}
 }
 

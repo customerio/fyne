@@ -79,6 +79,9 @@ type window struct {
 	mouseClickCount                 int
 	mouseCancelFunc                 context.CancelFunc
 
+	// cursorPosition, when set, reports where the cursor is, for tests.
+	cursorPosition func() (xpos, ypos float64, ok bool)
+
 	onClosed           func()
 	onCloseIntercepted func()
 
@@ -597,6 +600,15 @@ func (w *window) create() {
 	width, height := win.GetSize()
 	w.processFrameSized(width, height)
 	w.processResized(width, height)
+}
+
+// cursorPos reports no position unless a test sets one: in a browser every
+// pointer event reaches the canvas, so the last one seen is where it is.
+func (w *window) cursorPos() (xpos, ypos float64, ok bool) {
+	if w.cursorPosition != nil {
+		return w.cursorPosition()
+	}
+	return 0, 0, false
 }
 
 func (w *window) view() *glfw.Window {

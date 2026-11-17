@@ -105,6 +105,10 @@ type window struct {
 	mouseClickCount            int
 	mouseCancelFunc            context.CancelFunc
 
+	// cursorPosition, when set, replaces asking the view where the cursor is,
+	// for tests whose pointer exists only in the events they send.
+	cursorPosition func() (xpos, ypos float64, ok bool)
+
 	onClosed           func()
 	onCloseIntercepted func()
 
@@ -914,6 +918,20 @@ func (w *window) create() {
 
 	// Initialize accessibility support
 	w.initAccessibilityForWindow()
+}
+
+// cursorPos is where the cursor is now, in the units of the cursor position
+// callback, or false if the window has no view to ask.
+func (w *window) cursorPos() (xpos, ypos float64, ok bool) {
+	if w.cursorPosition != nil {
+		return w.cursorPosition()
+	}
+	view := w.view()
+	if view == nil {
+		return 0, 0, false
+	}
+	xpos, ypos = view.GetCursorPos()
+	return xpos, ypos, true
 }
 
 func (w *window) view() *glfw.Window {

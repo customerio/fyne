@@ -1248,6 +1248,31 @@ func TestWindow_Tapped(t *testing.T) {
 	})
 }
 
+func TestWindow_TappedWhereCursorIsWhenMovesWentElsewhere(t *testing.T) {
+	w := createWindow("Test")
+	left := &hoverableObject{Rectangle: canvas.NewRectangle(color.White)}
+	right := &tappableObject{Rectangle: canvas.NewRectangle(color.White)}
+	w.SetContent(container.NewGridWithColumns(2, left, right))
+	w.Resize(fyne.NewSize(200, 100))
+
+	runOnMain(func() {
+		w.moveMouse(20, 50) // the last move the window saw was over the left object
+		assert.NotNil(t, left.popMouseInEvent(), "hovering the left object")
+
+		// the cursor then moved over the right object while another view of the
+		// window was receiving the moves
+		w.cursorPosition = func() (float64, float64, bool) { return 150, 50, true }
+		w.mouseClicked(w.viewport, glfw.MouseButton1, glfw.Press, 0)
+		w.mouseClicked(w.viewport, glfw.MouseButton1, glfw.Release, 0)
+
+		if e, _ := right.popTapEvent().(*fyne.PointEvent); assert.NotNil(t, e, "the object under the cursor was tapped") {
+			assert.Equal(t, fyne.NewPos(150, 50), e.AbsolutePosition)
+		}
+		assert.NotNil(t, left.popMouseOutEvent(), "the pointer left the object it had been over")
+		assert.Nil(t, w.mouseDragged, "the press started no drag")
+	})
+}
+
 func TestWindow_TouchScreenTappedWithMouseMovePending(t *testing.T) {
 	w := createWindow("Test")
 	left := &tappableObject{Rectangle: canvas.NewRectangle(color.White)}
@@ -2180,6 +2205,8 @@ func createWindow(title string) *safeWindow {
 	runOnMain(func() { // tests launch in a different context
 		w = d.CreateWindow(title).(*window)
 		w.create()
+		// the test's events are the only pointer there is
+		w.cursorPosition = noCursor
 		// disable the GLFW window size callback because it causes a delayed canvas
 		// resize that breaks some tests sometimes
 		w.view().SetSizeCallback(func(_ *glfw.Window, _, _ int) {})
@@ -2187,11 +2214,19 @@ func createWindow(title string) *safeWindow {
 	return &safeWindow{window: w}
 }
 
+// noCursor is the cursor of a test window: none beyond the events the test
+// sends, so a press stays where the last of them put the pointer.
+func noCursor() (float64, float64, bool) {
+	return 0, 0, false
+}
+
 func createWindowWithResizeCallback(title string) *safeWindow {
 	var w *window
 	runOnMain(func() { // tests launch in a different context
 		w = d.CreateWindow(title).(*window)
 		w.create()
+		// the test's events are the only pointer there is
+		w.cursorPosition = noCursor
 	})
 	return &safeWindow{window: w}
 }
