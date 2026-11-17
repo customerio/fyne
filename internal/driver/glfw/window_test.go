@@ -2216,7 +2216,7 @@ func createWindow(title string) *safeWindow {
 
 // noCursor is the cursor of a test window: none beyond the events the test
 // sends, so a press stays where the last of them put the pointer.
-func noCursor() (float64, float64, bool) {
+func noCursor() (xpos, ypos float64, ok bool) {
 	return 0, 0, false
 }
 
