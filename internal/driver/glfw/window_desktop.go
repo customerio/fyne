@@ -108,6 +108,9 @@ type window struct {
 	// cursorPosition, when set, replaces asking the view where the cursor is,
 	// for tests whose pointer exists only in the events they send.
 	cursorPosition func() (xpos, ypos float64, ok bool)
+	// pointerInjected is set while the pointer is where InjectMouseMove put
+	// it, which the OS cursor does not follow.
+	pointerInjected bool
 
 	onClosed           func()
 	onCloseIntercepted func()
@@ -465,6 +468,7 @@ func (w *window) setCustomCursor(rawCursor *glfw.Cursor, isCustomCursor bool) {
 }
 
 func (w *window) mouseMoved(_ *glfw.Window, xpos, ypos float64) {
+	w.pointerInjected = false
 	w.newMousePosX = xpos
 	w.newMousePosY = ypos
 	w.mousePosUpdateProcessed = false

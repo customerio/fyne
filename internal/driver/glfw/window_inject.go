@@ -10,6 +10,7 @@ var _ desktop.InputInjector = (*window)(nil)
 
 func (w *window) InjectMouseMove(pos fyne.Position) {
 	w.runInjected(func() {
+		w.pointerInjected = true
 		scale := w.canvas.Scale()
 		w.newMousePosX = float64(pos.X * scale)
 		w.newMousePosY = float64(pos.Y * scale)
@@ -49,7 +50,7 @@ func (w *window) InjectChar(r rune) {
 
 // runInjected calls fn on the main goroutine, directly when already there so
 // a caller inside fyne.DoAndWait does not wait on the queue it is draining.
-func (w *window) runInjected(fn func()) {
+func (*window) runInjected(fn func()) {
 	if async.IsMainGoroutine() {
 		fn()
 		return

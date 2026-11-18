@@ -35,6 +35,26 @@ func TestWindow_InjectInput(t *testing.T) {
 		})
 	})
 
+	t.Run("given the OS cursor elsewhere, an injected click should tap at the injected position", func(t *testing.T) {
+		w := createWindow("Test")
+		o := &tappableObject{Rectangle: canvas.NewRectangle(color.White)}
+		w.SetContent(o)
+		w.Resize(fyne.NewSize(100, 100))
+		repaintWindow(w)
+		w.cursorPosition = func() (float64, float64, bool) { return 5, 5, true }
+
+		w.InjectMouseMove(fyne.NewPos(30, 40))
+		w.InjectMouseButton(desktop.MouseButtonPrimary, true, 0)
+		w.InjectMouseButton(desktop.MouseButtonPrimary, false, 0)
+
+		runOnMain(func() {
+			e, _ := o.popTapEvent().(*fyne.PointEvent)
+			if assert.NotNil(t, e) {
+				assert.Equal(t, fyne.NewPos(30, 40), e.AbsolutePosition)
+			}
+		})
+	})
+
 	t.Run("given an overlay above the content, an injected click should reach the overlay and not the content", func(t *testing.T) {
 		w := createWindow("Test")
 		under := &tappableObject{Rectangle: canvas.NewRectangle(color.White)}

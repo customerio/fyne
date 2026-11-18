@@ -615,7 +615,7 @@ func (w *window) processMouseClicked(button desktop.MouseButton, action action, 
 // With a button already held the view is tracking the drag, and the
 // position it reported is current, so this does nothing with one held.
 func (w *window) refreshMousePosOnPress(action action) {
-	if action != press || w.mouseButton != 0 {
+	if action != press || w.mouseButton != 0 || w.pointerInjected {
 		return
 	}
 	xpos, ypos, ok := w.cursorPos()
