@@ -1656,6 +1656,8 @@ func wrapBreakLines(seg RichTextSegment, trunc fyne.TextTruncation, measureWidth
 			l.firstSegmentReuse = reuse
 			reuse++
 			bounds = append(bounds, l)
+			// only the first line shares a row with content before it
+			measureWidth = maxSize.Width
 			continue
 		}
 		for low < high {
@@ -1701,6 +1703,8 @@ func wrapWordLines(seg RichTextSegment, trunc fyne.TextTruncation, measureWidth 
 			l.firstSegmentReuse = reuse
 			reuse++
 			bounds = append(bounds, l)
+			// only the first line shares a row with content before it
+			measureWidth = maxSize.Width
 			continue
 		}
 		for low < high {
