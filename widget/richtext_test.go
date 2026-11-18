@@ -1273,6 +1273,25 @@ func TestText_lineBounds_small_firstWidth(t *testing.T) {
 	assert.Equal(t, 6, got[1].segEnd)
 }
 
+// A segment that starts with a newline after a nearly full row wraps its
+// later lines at the full width, not the little left on that row.
+func TestText_lineBounds_firstWidth_endsAtNewline(t *testing.T) {
+	measurer := func(text []rune) fyne.Size {
+		return fyne.MeasureText(string(text), 14, fyne.TextStyle{})
+	}
+	for _, wrap := range []fyne.TextWrap{fyne.TextWrapWord, fyne.TextWrapBreak} {
+		richText := NewRichTextWithText("\n\nyes it is")
+		richText.Wrapping = wrap
+		richText.Truncation = fyne.TextTruncateOff
+		got, _ := lineBounds(richText, richText.Segments[0], 10, fyne.NewSize(200, 100), measurer)
+		if !assert.Len(t, got, 3, "wrap %v", wrap) {
+			continue
+		}
+		assert.Equal(t, 2, got[2].segBegin, "wrap %v", wrap)
+		assert.Equal(t, 11, got[2].segEnd, "wrap %v", wrap)
+	}
+}
+
 func TestText_Truncate_Segments(t *testing.T) {
 	for name, tt := range map[string]struct {
 		trunc fyne.TextTruncation
