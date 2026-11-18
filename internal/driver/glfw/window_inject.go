@@ -10,6 +10,7 @@ var _ desktop.InputInjector = (*window)(nil)
 
 func (w *window) InjectMouseMove(pos fyne.Position) {
 	w.runInjected(func() {
+		w.pointerInjected = true
 		scale := w.canvas.Scale()
 		w.newMousePosX = float64(pos.X * scale)
 		w.newMousePosY = float64(pos.Y * scale)
