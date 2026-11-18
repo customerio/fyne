@@ -25,6 +25,10 @@ func TestRasteriseAtlasGlyph_SmoothsThemeAndSystemFonts(t *testing.T) {
 		WalkGlyphs(fonts, s, 14, 2, fyne.TextStyle{}, func(pg PlacedGlyph) { placed = append(placed, pg) })
 		require.Len(t, placed, 1, s)
 		pg := placed[0]
+		if s == "水" && pg.Glyph.GlyphID == 0 {
+			t.Log("no system font here covers 水 (GitHub's macOS runners have none)")
+			continue
+		}
 		require.NotZero(t, pg.Glyph.GlyphID, "%q has no glyph", s)
 
 		goText := image.NewRGBA(image.Rect(0, 0, 48, 48))
