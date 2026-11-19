@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/internal"
 	"fyne.io/fyne/v2/internal/app"
 	"fyne.io/fyne/v2/internal/build"
@@ -44,6 +45,15 @@ func (c *glCanvas) Capture() image.Image {
 		img = c.Painter().Capture(c)
 	})
 	return img
+}
+
+var _ desktop.FrameCapturer = (*glCanvas)(nil)
+
+func (c *glCanvas) CaptureFrame(buf []uint8) (pix []uint8, width, height int) {
+	c.context.(*window).RunWithContext(func() {
+		pix, width, height = c.Painter().CaptureFrame(c, buf)
+	})
+	return pix, width, height
 }
 
 func (c *glCanvas) Content() fyne.CanvasObject {

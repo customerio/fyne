@@ -19,6 +19,8 @@ type Painter interface {
 	Init()
 	// Capture requests that the specified canvas be drawn to an in-memory image
 	Capture(fyne.Canvas) image.Image
+	// CaptureFrame copies the last painted frame into buf, bottom row first, growing buf when it is too small
+	CaptureFrame(c fyne.Canvas, buf []uint8) (pix []uint8, width, height int)
 	// Clear tells our painter to prepare a fresh paint
 	Clear()
 	// Free is used to indicate that a certain canvas object is no longer needed

@@ -43,9 +43,22 @@ func (c *captureImage) At(x, y int) color.Color {
 }
 
 func (p *painter) Capture(c fyne.Canvas) image.Image {
+	pixels, width, height := p.CaptureFrame(c, nil)
+	return &captureImage{
+		pix:    pixels,
+		width:  width,
+		height: height,
+	}
+}
+
+func (p *painter) CaptureFrame(c fyne.Canvas, buf []uint8) ([]uint8, int, int) {
 	pos := fyne.NewPos(c.Size().Width, c.Size().Height)
 	width, height := c.PixelCoordinateForPosition(pos)
-	pixels := make([]uint8, width*height*4)
+	pixels := buf
+	if cap(pixels) < width*height*4 {
+		pixels = make([]uint8, width*height*4)
+	}
+	pixels = pixels[:width*height*4]
 
 	// the viewport is anchored to the top of the drawable
 	y := p.viewportOffsetY
@@ -63,9 +76,5 @@ func (p *painter) Capture(c fyne.Canvas) image.Image {
 		p.logError()
 	})
 
-	return &captureImage{
-		pix:    pixels,
-		width:  width,
-		height: height,
-	}
+	return pixels, width, height
 }

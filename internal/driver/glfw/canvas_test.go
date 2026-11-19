@@ -712,3 +712,38 @@ func (s *safeCanvas) TexScale() (ret float32) {
 func (s *safeCanvas) ToggleMenu() {
 	runOnMain(s.glCanvas.ToggleMenu)
 }
+
+func TestGlCanvas_CaptureFrame(t *testing.T) {
+	w := createWindow("Test")
+	w.SetPadded(false)
+	w.SetContent(canvas.NewRectangle(color.NRGBA{R: 0xff, A: 0xff}))
+	w.Resize(fyne.NewSize(20, 10))
+	repaintWindow(w)
+	c := w.Canvas().glCanvas
+
+	t.Run("given a painted canvas, CaptureFrame should return Capture's pixels bottom row first", func(t *testing.T) {
+		var (
+			pix           []uint8
+			width, height int
+			img           image.Image
+		)
+		runOnMain(func() {
+			pix, width, height = c.CaptureFrame(nil)
+			img = c.Capture()
+		})
+		require.Equal(t, img.Bounds().Dx(), width)
+		require.Equal(t, img.Bounds().Dy(), height)
+		require.Len(t, pix, width*height*4)
+		r, g, b, _ := img.At(0, height-1).RGBA()
+		assert.Equal(t, []uint8{uint8(r >> 8), uint8(g >> 8), uint8(b >> 8)}, pix[0:3])
+	})
+
+	t.Run("given a buffer large enough, CaptureFrame should fill it in place", func(t *testing.T) {
+		var pix []uint8
+		buf := make([]uint8, 0, 4*1024*1024)
+		runOnMain(func() {
+			pix, _, _ = c.CaptureFrame(buf)
+		})
+		assert.Same(t, &buf[:1][0], &pix[0])
+	})
+}
