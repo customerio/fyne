@@ -33,7 +33,7 @@ func TestClearFontCacheLetsShapedFacesGo(t *testing.T) {
 
 	ClearFontCache()
 	for i := 0; i < 20 && !freed.Load(); i++ {
-		runtime.GC()
+		runtime.GC() //nolint:revive // the finalizer that shows the face was freed runs only after a collection
 		time.Sleep(10 * time.Millisecond)
 	}
 	assert.True(t, freed.Load(), "a face shaped before ClearFontCache is still reachable after it")
