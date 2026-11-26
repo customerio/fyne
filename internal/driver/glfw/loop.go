@@ -2,6 +2,7 @@ package glfw
 
 import (
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -22,9 +23,62 @@ type funcData struct {
 
 // channel for queuing functions on the main thread
 var (
-	funcQueue        = async.NewUnboundedChan[funcData]()
-	running, drained atomic.Bool
+	funcQueue = newMainQueue()
+	running   atomic.Bool
 )
+
+// mainQueue carries functions to the main loop until the loop stops.
+//
+// Checking whether the loop has stopped and queuing a function must be one
+// step: a function queued after the loop's last look at the queue, but before
+// it said it had stopped, was never run and never answered, so a caller of
+// DoAndWait waited forever. The lifecycle's event goroutine was such a caller
+// when it handed over the OnStopped hook, and Run then waited on that
+// goroutine in WaitForEvents, so the process never exited.
+type mainQueue struct {
+	mu      sync.RWMutex
+	stopped bool
+	ch      *async.UnboundedChan[funcData]
+}
+
+func newMainQueue() *mainQueue {
+	return &mainQueue{ch: async.NewUnboundedChan[funcData]()}
+}
+
+// post queues fn, and reports false, queuing nothing, once stop has run.
+func (q *mainQueue) post(fn funcData) bool {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if q.stopped {
+		return false
+	}
+	// The channel's own goroutine always takes from In, so this does not
+	// hold the lock for long.
+	q.ch.In() <- fn
+	return true
+}
+
+func (q *mainQueue) out() <-chan funcData { return q.ch.Out() }
+
+// stop refuses further functions, then answers every caller still waiting on
+// one queued before, without running it: GLFW has terminated, and what was
+// queued may touch it (a second Quit closing the windows again panics). A
+// function refused after this runs on its caller, as before the queue had a
+// stop of its own.
+func (q *mainQueue) stop() {
+	q.mu.Lock()
+	q.stopped = true
+	q.mu.Unlock()
+
+	q.ch.Close()
+	// Close hands what it holds to Out and then closes it; reading until it
+	// does catches every function queued before stopped was set.
+	for f := range q.ch.Out() {
+		if f.done != nil {
+			f.done <- struct{}{}
+		}
+	}
+}
 
 // Arrange that main.main runs on main thread.
 func init() {
@@ -41,20 +95,25 @@ func runOnMain(f func()) {
 func runOnMainWithWait(f func(), wait bool) {
 	// If we are on main before app run just execute - otherwise add it to the main queue and wait.
 	// We also need to run it as-is if the app is in the process of shutting down as the queue will be stopped.
-	if (!running.Load() && async.IsMainGoroutine()) || drained.Load() {
+	if !running.Load() && async.IsMainGoroutine() {
 		f()
 		return
 	}
 
-	if wait {
-		done := common.DonePool.Get()
-		defer common.DonePool.Put(done)
-
-		funcQueue.In() <- funcData{f: f, done: done}
-		<-done
-	} else {
-		funcQueue.In() <- funcData{f: f}
+	if !wait {
+		if !funcQueue.post(funcData{f: f}) {
+			f()
+		}
+		return
 	}
+
+	done := common.DonePool.Get()
+	defer common.DonePool.Put(done)
+	if !funcQueue.post(funcData{f: f, done: done}) {
+		f()
+		return
+	}
+	<-done
 }
 
 func decideRepaint(visible, ready bool, checkDirtyAndClear func() bool) bool {
@@ -136,22 +195,18 @@ func (d *gLDriver) runGL() {
 		case <-d.done:
 			eventTick.Stop()
 			d.Terminate()
+
+			// as we are shutting down make sure we drain the pending funcQueue and close it out.
+			// This comes before the OnStopped hook is queued: the event goroutine
+			// then always finds the queue stopped and runs the hook itself.
+			funcQueue.stop()
+
 			l, _ := fyne.CurrentApp().Lifecycle().(*app.Lifecycle)
 			if f := l.OnStopped(); f != nil {
 				l.QueueEvent(f)
 			}
-
-			// as we are shutting down make sure we drain the pending funcQueue and close it out.
-			for len(funcQueue.Out()) > 0 {
-				f := <-funcQueue.Out()
-				if f.done != nil {
-					f.done <- struct{}{}
-				}
-			}
-			drained.Store(true)
-			funcQueue.Close()
 			return
-		case f := <-funcQueue.Out():
+		case f := <-funcQueue.out():
 			f.f()
 			if f.done != nil {
 				f.done <- struct{}{}
